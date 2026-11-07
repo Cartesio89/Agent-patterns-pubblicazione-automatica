@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mappa degli agenti</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: flusso verticale a sinistra (SVG), a destra il passo corrente; sotto, cosa è cambiato rispetto all'originale. */
+:root {
+  --bg: #F2F4F5; --surface: #FFFFFF; --ink: #15222B; --muted: #566771; --line: #CFD8DD;
+  --accent: #0B6E8A; --ok: #1E7A4C; --err: #B3261E; --warn: #8F5600; --skip: #6F7E87;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0F171C; --surface: #172229; --ink: #E6EDF1; --muted: #9AABB5; --line: #2B3A43;
+    --accent: #4CB8D6; --ok: #4FC183; --err: #FF8A80; --warn: #F0B04A; --skip: #8A9AA4; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0F171C; --surface: #172229; --ink: #E6EDF1; --muted: #9AABB5; --line: #2B3A43;
+  --accent: #4CB8D6; --ok: #4FC183; --err: #FF8A80; --warn: #F0B04A; --skip: #8A9AA4; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 15px; line-height: 1.5;
+  margin: 0; padding-block: 28px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 1040px; margin: 0 auto; display: grid; gap: 28px; }
+.wrap > *, .stage > *, .panel > * { min-width: 0; }
+h1 { font-size: 1.7rem; line-height: 1.2; margin: 0 0 6px; font-weight: 600; text-wrap: balance; }
+h2 { font-size: 1.05rem; margin: 0 0 10px; font-weight: 600; }
+.lead { color: var(--muted); margin: 0; max-width: 62ch; }
+.note { color: var(--muted); font-size: .85rem; margin: 8px 0 0; max-width: 70ch; }
+.tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 18px; }
+.tools .sep { width: 1px; height: 24px; background: var(--line); margin: 0 4px; }
+button {
+  font: inherit; font-size: .88rem; color: var(--ink); background: var(--surface); border: 1px solid var(--line);
+  border-radius: 6px; padding: 7px 12px; cursor: pointer; min-height: 36px;
+}
+button:hover { border-color: var(--accent); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+.stage { display: grid; grid-template-columns: minmax(0, 440px) minmax(0, 1fr); gap: 28px; align-items: start; }
+.diagram { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px; }
+svg { display: block; width: 100%; height: auto; max-width: 440px; margin: 0 auto; }
+.node rect { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; transition: stroke .25s; }
+.node .t { font: 600 13.5px var(--sans); fill: var(--ink); }
+.node .s { font: 400 11px var(--sans); fill: var(--muted); }
+.node .b { font: 500 10.5px var(--mono); }
+.node.manual rect { stroke-dasharray: 5 4; }
+.node.st-ok rect { stroke: var(--ok); } .node.st-ok .b { fill: var(--ok); }
+.node.st-error rect { stroke: var(--err); stroke-width: 2.2; } .node.st-error .b { fill: var(--err); }
+.node.st-skipped rect { stroke: var(--skip); stroke-dasharray: 3 3; } .node.st-skipped .b { fill: var(--skip); }
+.node.st-warn rect { stroke: var(--warn); stroke-width: 2.2; } .node.st-warn .b { fill: var(--warn); }
+.node.st-wait rect { stroke: var(--accent); stroke-width: 2.2; } .node.st-wait .b { fill: var(--accent); }
+.node.active rect { stroke: var(--accent); stroke-width: 3; animation: pulse 1.3s ease-in-out infinite; }
+@keyframes pulse { 50% { stroke-width: 1.6; } }
+.edge { fill: none; stroke: var(--line); stroke-width: 1.6; }
+.edge.on { stroke: var(--accent); }
+.packet { fill: var(--accent); }
+.panel { display: grid; gap: 14px; }
+.step { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; min-height: 168px; }
+.step .n { font: 500 .78rem var(--mono); color: var(--muted); letter-spacing: .04em; text-transform: uppercase; }
+.step h2 { margin: 4px 0 8px; font-size: 1.15rem; }
+.step p { margin: 0; max-width: 60ch; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: .82rem; color: var(--muted); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; border: 2px solid; margin-right: 6px; vertical-align: -1px; }
+.table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+table { border-collapse: collapse; width: 100%; min-width: 640px; font-size: .9rem; }
+th, td { text-align: left; padding: 10px 14px; vertical-align: top; border-bottom: 1px solid var(--line); }
+th { font: 500 .75rem var(--mono); color: var(--muted); letter-spacing: .05em; text-transform: uppercase; }
+tr:last-child td { border-bottom: 0; }
+.tag { display: inline-block; font: 500 .72rem var(--mono); padding: 2px 7px; border-radius: 4px; border: 1px solid; white-space: nowrap; margin: 0 4px 4px 0; }
+.tag.ok { color: var(--ok); border-color: var(--ok); }
+.tag.warn { color: var(--warn); border-color: var(--warn); }
+.tag.skip { color: var(--skip); border-color: var(--skip); }
+@media (max-width: 860px) { .stage { grid-template-columns: minmax(0, 1fr); } }
+@media (prefers-reduced-motion: reduce) { .node.active rect { animation: none; } }
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Mappa degli agenti</h1>
+    <p class="lead">Come lavora lo scheletro Python che sostituisce <code>gads_multiagent</code> nel progetto di personal branding: dal calcolo di cosa eseguire fino all'approvazione umana.</p>
+    <div class="tools" role="group" aria-label="Controlli">
+      <button id="play" type="button">Avvia</button>
+      <button id="next" type="button">Passo avanti</button>
+      <button id="reset" type="button">Riavvia</button>
+      <span class="sep" aria-hidden="true"></span>
+      <button type="button" class="scn" data-s="A" aria-pressed="true">Tutto ok</button>
+      <button type="button" class="scn" data-s="B" aria-pressed="false">La fonte fallisce</button>
+      <button type="button" class="scn" data-s="C" aria-pressed="false">Il cancello fallisce</button>
+    </div>
+    <p class="note">È una spiegazione della logica come l'ho scritta, non dati di un'esecuzione reale. Il codice è stato provato con un LLM finto: nessuna chiamata a un modello vero, nessun feed vero.</p>
+  </header>
+
+  <section class="stage" aria-label="Flusso degli agenti">
+    <div class="diagram"><svg id="svg" viewBox="0 0 420 800" role="img" aria-label="Diagramma del flusso: orchestratore, NewsScout, agenti di bozza, cancello di revisione, sintesi, report, approvazione umana"></svg></div>
+    <div class="panel">
+      <div class="step" aria-live="polite">
+        <div class="n" id="stepn">Pronto</div>
+        <h2 id="stept">Premi Avvia</h2>
+        <p id="stepb">Scegli uno scenario e guarda come l'orchestratore decide, esegue, controlla e si ferma davanti all'approvazione umana. Con «Passo avanti» vai un passo alla volta.</p>
+      </div>
+      <div class="legend" aria-hidden="true">
+        <span><i style="color:var(--accent)"></i>in corso</span>
+        <span><i style="color:var(--ok)"></i>ok</span>
+        <span><i style="color:var(--err)"></i>errore</span>
+        <span><i style="color:var(--warn)"></i>ripiego</span>
+        <span><i style="color:var(--skip)"></i>saltato</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Cosa è cambiato rispetto a gads_multiagent</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Originale</th><th>Ora</th><th>Come è stato verificato</th></tr></thead>
+        <tbody>
+          <tr><td>JSON rotto dall'LLM: l'agente dichiara «Analisi completata» con dati vuoti</td><td>Errore esplicito dopo un tentativo di riparazione; gli agenti dipendenti vengono saltati</td><td><span class="tag warn">letto nel codice</span><span class="tag ok">test</span></td></tr>
+          <tr><td>La riflessione approva se manca la chiave <code>approved</code></td><td>Fail-closed: serve <code>approved: true</code> esplicito; i controlli del codice non si scavalcano</td><td><span class="tag warn">letto nel codice</span><span class="tag ok">test + mutazione</span></td></tr>
+          <tr><td>Scritture concorrenti su <code>memory.json</code></td><td>Lock, scrittura atomica, file corrotto messo da parte invece di essere sovrascritto</td><td><span class="tag skip">race non riprodotta (12 prove)</span><span class="tag ok">test + mutazione</span></td></tr>
+          <tr><td>Modello fisso nel codice</td><td>Da variabile d'ambiente; parametro <code>temperature</code> disattivabile</td><td><span class="tag warn">id predefinito non verificato sul tuo account</span></td></tr>
+          <tr><td>Piano «smart» deciso dall'LLM</td><td>Cadenza calcolata dal codice sulla memoria: zero token, stesso esito a parità di storico</td><td><span class="tag ok">test</span></td></tr>
+          <tr><td>Scheduler Python sempre acceso</td><td>Un solo giro per esecuzione, pianificato dall'Utilità di pianificazione di Windows</td><td><span class="tag skip">non provato su Windows</span></td></tr>
+          <tr><td>TRAQ bridge</td><td>Non portato: lo script richiamato non era nella cartella</td><td><span class="tag skip">rimosso</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<script>
+(function () {
+  var NS = "http://www.w3.org/2000/svg";
+  var N = {
+    orch:   { x: 20,  y: 16,  w: 380, h: 50, t: "Orchestratore", s: "sceglie gli agenti dalla cadenza" },
+    scout:  { x: 20,  y: 100, w: 380, h: 56, t: "NewsScout", s: "feed RSS, link verificati dal codice" },
+    ig:     { x: 20,  y: 196, w: 180, h: 72, t: "InstagramDraft", s: "una bozza + controlli" },
+    nl:     { x: 220, y: 196, w: 180, h: 72, t: "NewsletterDraft", s: "digest di 7 giorni" },
+    gate:   { x: 20,  y: 304, w: 380, h: 64, t: "Cancello di revisione", s: "fail-closed: conta solo approved: true" },
+    synth:  { x: 20,  y: 404, w: 380, h: 50, t: "Sintesi", s: "se l'LLM manca, la scrive il codice" },
+    report: { x: 20,  y: 488, w: 380, h: 50, t: "Report e bozze con stato", s: "Markdown + JSON, scrittura atomica" },
+    human:  { x: 20,  y: 572, w: 380, h: 50, t: "Approvazione umana", s: "nessuna bozza esce senza di te" },
+    pub:    { x: 20,  y: 656, w: 380, h: 44, t: "Pubblicazione", s: "manuale, non automatizzata", manual: true },
+    mem:    { x: 20,  y: 726, w: 380, h: 44, t: "Memoria", s: "cadenza · notizie già viste · storico", manual: true }
+  };
+  var E = [["orch","scout"],["scout","ig"],["scout","nl"],["ig","gate"],["nl","gate"],["gate","synth"],["synth","report"],["report","human"],["human","pub"]];
+
+  function mk(tag, attrs, parent) {
+    var el = document.createElementNS(NS, tag);
+    for (var k in attrs) el.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(el);
+    return el;
+  }
+  var svg = document.getElementById("svg");
+  var edgeEls = {}, nodeEls = {}, badgeEls = {};
+  E.forEach(function (e) {
+    var a = N[e[0]], b = N[e[1]];
+    var x1 = a.x + a.w / 2, y1 = a.y + a.h, x2 = b.x + b.w / 2, y2 = b.y, ym = (y1 + y2) / 2;
+    if (e[0] === "scout" || e[1] === "gate") { x1 = (e[0] === "scout") ? 210 : a.x + a.w / 2; x2 = (e[1] === "gate") ? 210 : b.x + b.w / 2; }
+    edgeEls[e.join(">")] = mk("path", { "class": "edge", d: "M" + x1 + " " + y1 + " C" + x1 + " " + ym + "," + x2 + " " + ym + "," + x2 + " " + y2 }, svg);
+  });
+  Object.keys(N).forEach(function (id) {
+    var n = N[id];
+    var g = mk("g", { "class": "node" + (n.manual ? " manual" : ""), id: "n-" + id }, svg);
+    mk("rect", { x: n.x, y: n.y, width: n.w, height: n.h, rx: 7 }, g);
+    var t = mk("text", { "class": "t", x: n.x + 12, y: n.y + 21 }, g); t.textContent = n.t;
+    var s = mk("text", { "class": "s", x: n.x + 12, y: n.y + 38 }, g); s.textContent = n.s;
+    var narrow = n.w < 200;
+    var b = mk("text", { "class": "b", x: narrow ? n.x + 12 : n.x + n.w - 12, y: narrow ? n.y + n.h - 10 : n.y + 21, "text-anchor": narrow ? "start" : "end" }, g);
+    nodeEls[id] = g; badgeEls[id] = b;
+  });
+  var packet = mk("circle", { "class": "packet", r: 5, cx: -20, cy: -20 }, svg);
+
+  var S = {
+    A: [
+      { t: "Pianificazione", b: "L'orchestratore guarda nella memoria quando ogni agente è riuscito l'ultima volta e sceglie quelli in scadenza. Nessuna chiamata all'LLM: non costa token e non cambia da una run all'altra.", a: ["orch", "mem"], set: { orch: "ok" }, ed: [] },
+      { t: "NewsScout", b: "Legge i feed configurati, scarta le notizie già usate e fa scegliere le migliori all'LLM. Ogni link scritto dall'LLM che non compare nei feed viene scartato dal codice.", a: ["scout"], set: { scout: "ok" }, ed: ["orch>scout"] },
+      { t: "Due agenti in parallelo", b: "I controlli che non si possono scavalcare stanno nel codice: massimo 5 hashtag, 2200 caratteri, link uguale alla fonte, nessun segnaposto rimasto. Se è configurato il pacchetto Instagram, la didascalia passa da humanize.py e caption.py.", a: ["ig", "nl"], set: { ig: "ok", nl: "ok" }, ed: ["scout>ig", "scout>nl"] },
+      { t: "Cancello di revisione", b: "Un secondo passaggio dell'LLM controlla fatti, numeri e toni. Approva solo con approved: true esplicito. Una bozza con problemi trovati dal codice resta «da rivedere» anche se l'LLM la approva.", a: ["gate"], set: { gate: "ok" }, ed: ["ig>gate", "nl>gate"] },
+      { t: "Sintesi", b: "L'LLM scrive la sintesi di 2-4 righe usando solo i fatti dell'esecuzione.", a: ["synth"], set: { synth: "ok" }, ed: ["gate>synth"] },
+      { t: "Report", b: "Report in Markdown e JSON. Ogni bozza porta il suo stato: pronta per l'approvazione, da rivedere o bloccata.", a: ["report"], set: { report: "ok" }, ed: ["synth>report"] },
+      { t: "Tocca a te", b: "Nessuna bozza viene pubblicata senza la tua approvazione. La pubblicazione resta un passo manuale: il codice non contiene chiamate di pubblicazione.", a: ["human"], set: { human: ["wait", "in attesa"], pub: ["skipped", "manuale"] }, ed: ["report>human", "human>pub"] }
+    ],
+    B: [
+      { t: "Pianificazione", b: "Stesso inizio: l'orchestratore sceglie gli agenti in scadenza dalla memoria.", a: ["orch", "mem"], set: { orch: "ok" }, ed: [] },
+      { t: "NewsScout in errore", b: "La risposta dell'LLM non è un JSON valido nemmeno dopo il tentativo di riparazione, quindi l'agente risulta in errore. Nell'originale restituiva dati vuoti e dichiarava «Analisi completata».", a: ["scout"], set: { scout: ["error", "errore"] }, ed: ["orch>scout"] },
+      { t: "Gli agenti dipendenti si fermano", b: "InstagramDraft dipende dalla fonte: viene saltato invece di lavorare su dati vuoti. NewsletterDraft legge la memoria: senza almeno 3 notizie negli ultimi 7 giorni non ha materiale e salta.", a: ["ig", "nl"], set: { ig: ["skipped", "saltato"], nl: ["skipped", "saltato"] }, ed: [] },
+      { t: "Nessuna bozza da controllare", b: "Senza bozze il cancello non approva niente: il risultato è «non approvato», mai «approvato per assenza di problemi».", a: ["gate"], set: { gate: ["warn", "nessuna bozza"] }, ed: [] },
+      { t: "Sintesi e report", b: "Il report esce comunque e dice cosa è fallito. Il programma termina con codice d'uscita 3, così una pianificazione automatica lo registra come anomalo.", a: ["synth", "report"], set: { synth: "ok", report: "ok" }, ed: ["gate>synth", "synth>report"] },
+      { t: "Niente da approvare", b: "Non c'è nessuna bozza. Si interviene sulla causa (qui: la risposta dell'LLM), non sul testo.", a: ["human"], set: { human: ["skipped", "nulla da fare"], pub: ["skipped", "manuale"] }, ed: ["report>human"] }
+    ],
+    C: [
+      { t: "Pianificazione", b: "Stesso inizio: l'orchestratore sceglie gli agenti in scadenza dalla memoria.", a: ["orch", "mem"], set: { orch: "ok" }, ed: [] },
+      { t: "Le bozze arrivano", b: "NewsScout, InstagramDraft e NewsletterDraft producono bozze come nello scenario «Tutto ok».", a: ["scout", "ig", "nl"], set: { scout: "ok", ig: "ok", nl: "ok" }, ed: ["orch>scout", "scout>ig", "scout>nl"] },
+      { t: "Il cancello non risponde bene", b: "La chiamata di revisione fallisce, oppure risponde senza approved: true (per esempio «true» scritto come testo). Tutte le bozze restano «da rivedere». Nell'originale, in questi casi, la riflessione approvava.", a: ["gate"], set: { gate: ["error", "non approvato"] }, ed: ["ig>gate", "nl>gate"] },
+      { t: "Anche la sintesi fallisce", b: "Se pure la sintesi dell'LLM non risponde, il report esce con un riepilogo scritto dal codice: conteggi di agenti e bozze, stato della revisione.", a: ["synth"], set: { synth: ["warn", "ripiego"] }, ed: ["gate>synth"] },
+      { t: "Report", b: "Il report esce con ogni bozza marcata «da rivedere».", a: ["report"], set: { report: "ok" }, ed: ["synth>report"] },
+      { t: "Tocca a te, bozza per bozza", b: "Le bozze non hanno il via libera automatico: le leggi e decidi tu. Le segnalazioni del codice (hashtag, link, segnaposto) sono riportate sotto ciascuna.", a: ["human"], set: { human: ["wait", "in attesa"], pub: ["skipped", "manuale"] }, ed: ["report>human", "human>pub"] }
+    ]
+  };
+
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var cur = "A", idx = -1, timer = null, raf = 0;
+  var btnPlay = document.getElementById("play");
+
+  function paint() {
+    var steps = S[cur], state = {};
+    for (var i = 0; i <= idx; i++) {
+      var set = steps[i].set;
+      for (var k in set) state[k] = Array.isArray(set[k]) ? set[k] : [set[k], set[k] === "ok" ? "ok" : set[k]];
+    }
+    var active = idx >= 0 ? steps[idx].a : [];
+    Object.keys(N).forEach(function (id) {
+      var st = state[id], g = nodeEls[id];
+      g.setAttribute("class", "node" + (N[id].manual ? " manual" : "") + (st ? " st-" + st[0] : "") + (active.indexOf(id) >= 0 ? " active" : ""));
+      badgeEls[id].textContent = st ? st[1] : "";
+    });
+    var on = idx >= 0 ? steps[idx].ed : [];
+    Object.keys(edgeEls).forEach(function (k) { edgeEls[k].setAttribute("class", "edge" + (on.indexOf(k) >= 0 ? " on" : "")); });
+    if (idx < 0) {
+      document.getElementById("stepn").textContent = "Pronto";
+      document.getElementById("stept").textContent = "Premi Avvia";
+      document.getElementById("stepb").textContent = "Scegli uno scenario e guarda come l'orchestratore decide, esegue, controlla e si ferma davanti all'approvazione umana. Con «Passo avanti» vai un passo alla volta.";
+    } else {
+      document.getElementById("stepn").textContent = "Passo " + (idx + 1) + " di " + steps.length;
+      document.getElementById("stept").textContent = steps[idx].t;
+      document.getElementById("stepb").textContent = steps[idx].b;
+    }
+  }
+
+  function movePacket(keys) {
+    cancelAnimationFrame(raf);
+    packet.setAttribute("cx", -20); packet.setAttribute("cy", -20);
+    if (reduce || !keys.length) return;
+    var paths = keys.map(function (k) { return edgeEls[k]; }), t0 = null, dur = 900;
+    function frame(ts) {
+      if (t0 === null) t0 = ts;
+      var p = Math.min((ts - t0) / dur, 1);
+      var pt = paths[0].getPointAtLength(paths[0].getTotalLength() * p);
+      packet.setAttribute("cx", pt.x); packet.setAttribute("cy", pt.y);
+      if (paths.length > 1) {
+        var second = paths[1].getPointAtLength(paths[1].getTotalLength() * p);
+        if (!packet2) { packet2 = packet.cloneNode(); svg.appendChild(packet2); }
+        packet2.setAttribute("cx", second.x); packet2.setAttribute("cy", second.y);
+      } else if (packet2) { packet2.setAttribute("cx", -20); }
+      if (p < 1) raf = requestAnimationFrame(frame);
+      else { packet.setAttribute("cx", -20); if (packet2) packet2.setAttribute("cx", -20); }
+    }
+    raf = requestAnimationFrame(frame);
+  }
+  var packet2 = null;
+
+  function go(i) {
+    idx = i; paint();
+    movePacket(idx >= 0 ? S[cur][idx].ed.slice(0, 2) : []);
+    if (idx >= S[cur].length - 1) { stop(); btnPlay.textContent = "Rigioca"; }
+  }
+  function stop() { clearInterval(timer); timer = null; if (btnPlay.textContent === "Pausa") btnPlay.textContent = "Avvia"; }
+  function play() {
+    if (idx >= S[cur].length - 1) go(-1);
+    btnPlay.textContent = "Pausa";
+    go(idx + 1);
+    timer = setInterval(function () { go(idx + 1); }, 3200);
+  }
+  btnPlay.addEventListener("click", function () { if (timer) stop(); else play(); });
+  document.getElementById("next").addEventListener("click", function () {
+    stop(); btnPlay.textContent = "Avvia";
+    if (idx >= S[cur].length - 1) go(-1); else go(idx + 1);
+  });
+  document.getElementById("reset").addEventListener("click", function () { stop(); btnPlay.textContent = "Avvia"; go(-1); });
+  Array.prototype.forEach.call(document.querySelectorAll(".scn"), function (b) {
+    b.addEventListener("click", function () {
+      cur = b.getAttribute("data-s");
+      Array.prototype.forEach.call(document.querySelectorAll(".scn"), function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+      stop(); btnPlay.textContent = "Avvia"; go(-1); play();
+    });
+  });
+  paint();
+  if (!reduce) setTimeout(function () { if (idx < 0 && !timer) play(); }, 700);
+})();
+</script>
+
+</body>
+</html>
